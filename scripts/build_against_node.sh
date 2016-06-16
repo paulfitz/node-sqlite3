@@ -14,12 +14,20 @@ function publish() {
 }
 
 # test installing from source
-npm install --build-from-source  --clang=1
-npm test
+if [[ ${COVERAGE} == true ]]; then
+    CXXFLAGS="--coverage" LDFLAGS="--coverage" npm install --build-from-source  --clang=1
+    npm test
+    ./py-local/bin/cpp-coveralls --exclude node_modules --exclude tests --build-root build --gcov-options '\-lp' --exclude docs --exclude build/Release/obj/gen --exclude deps  > /dev/null
+else
+    npm install --build-from-source  --clang=1
+    npm test
+fi
+
 
 publish
 
 # now test building against shared sqlite
+export NODE_SQLITE3_JSON1=no
 if [[ $(uname -s) == 'Darwin' ]]; then
     brew install sqlite
     npm install --build-from-source --sqlite=$(brew --prefix) --clang=1
@@ -27,6 +35,7 @@ else
     npm install --build-from-source --sqlite=/usr --clang=1
 fi
 npm test
+export NODE_SQLITE3_JSON1=yes
 
 platform=$(uname -s | sed "y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/")
 
@@ -61,6 +70,7 @@ if [[ $(uname -s) == 'Linux' ]]; then
     # broken for some unknown reason against io.js
     if [[ ${NODE_VERSION:0:4} != 'iojs' ]]; then
         # test source compile in 32 bit mode against external libsqlite3
+        export NODE_SQLITE3_JSON1=no
         CC=gcc-4.6 CXX=g++-4.6 npm install --build-from-source --sqlite=/usr  --clang=1
         npm test
     fi

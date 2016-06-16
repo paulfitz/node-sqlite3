@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.1.4
+
+ - Added support for node v6
+
+## 3.1.3
+
+ - Upgrade to node-pre-gyp@0.6.26 with better support for Electron
+
+## 3.1.2
+
+ - Only providing binaries for node v0.10x, v0.12.x, v4, and v5
+ - Upgrade to nan@2.2.x
+ - Upgrade to node-pre-gyp@0.6.24
+
+
+## 3.1.1
+
+ - Support for node 5.x
+ - Upgraded SQLite to 3.9.1: https://www.sqlite.org/releaselog/3_9_1.html
+ - Enabled json1 extension by default 
+
 ## 3.1.0
 
  - Support for node 3.x and 4.x
