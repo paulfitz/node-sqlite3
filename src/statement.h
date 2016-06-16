@@ -4,6 +4,7 @@
 
 #include "database.h"
 #include "threading.h"
+#include "marshal.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -118,6 +119,14 @@ public:
         Rows rows;
     };
 
+    struct MarshalBaton : Baton {
+        MarshalBaton(Statement* stmt_, Local<Function> cb_) :
+            Baton(stmt_, cb_), countRows(0) {}
+        std::vector<std::string> colNames;
+        std::vector<Marshal> colData;
+        int countRows;
+    };
+
     struct Async;
 
     struct EachBaton : Baton {
@@ -203,6 +212,7 @@ public:
     WORK_DEFINITION(Get);
     WORK_DEFINITION(Run);
     WORK_DEFINITION(All);
+    WORK_DEFINITION(AllMarshal);
     WORK_DEFINITION(Each);
     WORK_DEFINITION(Reset);
 

@@ -23,6 +23,7 @@ NAN_MODULE_INIT(Statement::Init) {
     Nan::SetPrototypeMethod(t, "get", Get);
     Nan::SetPrototypeMethod(t, "run", Run);
     Nan::SetPrototypeMethod(t, "all", All);
+    Nan::SetPrototypeMethod(t, "allMarshal", AllMarshal);
     Nan::SetPrototypeMethod(t, "each", Each);
     Nan::SetPrototypeMethod(t, "reset", Reset);
     Nan::SetPrototypeMethod(t, "finalize", Finalize);
@@ -568,6 +569,114 @@ void Statement::Work_AfterAll(uv_work_t* req) {
 
     STATEMENT_END();
 }
+
+//----------------------------------------------------------------------
+NAN_METHOD(Statement::AllMarshal) {
+    Statement* stmt = Nan::ObjectWrap::Unwrap<Statement>(info.This());
+
+    Baton* baton = stmt->Bind<MarshalBaton>(info);
+    if (baton == NULL) {
+        return Nan::ThrowError("Data type is not supported");
+    } else {
+        stmt->Schedule(Work_BeginAllMarshal, baton);
+        info.GetReturnValue().Set(info.This());
+    }
+}
+
+void Statement::Work_BeginAllMarshal(Baton* baton) {
+    STATEMENT_BEGIN(AllMarshal);
+}
+
+void Statement::Work_AllMarshal(uv_work_t* req) {
+    STATEMENT_INIT(MarshalBaton);
+
+    sqlite3_mutex* mtx = sqlite3_db_mutex(stmt->db->_handle);
+    sqlite3_mutex_enter(mtx);
+
+    sqlite3_stmt* sqstmt = stmt->_handle;
+
+    int columns = sqlite3_column_count(sqstmt);
+    baton->colNames.resize(columns);
+    baton->colData.resize(columns);
+    for (int i = 0; i < columns; i++) {
+      baton->colNames[i] = std::string(sqlite3_column_name(sqstmt, i));
+    }
+
+    // Make sure that we also reset when there are no parameters.
+    if (!baton->parameters.size()) {
+        sqlite3_reset(sqstmt);
+    }
+
+    if (stmt->Bind(baton->parameters)) {
+        while ((stmt->status = sqlite3_step(sqstmt)) == SQLITE_ROW) {
+          baton->countRows++;
+          for (int i = 0; i < columns; i++) {
+            int type = sqlite3_column_type(sqstmt, i);
+            switch (type) {
+                case SQLITE_INTEGER:
+                    baton->colData[i].marshalInt(sqlite3_column_int64(sqstmt, i));
+                    break;
+                case SQLITE_FLOAT:
+                    baton->colData[i].marshalDouble(sqlite3_column_double(sqstmt, i));
+                    break;
+                case SQLITE_TEXT: {
+                    const char* text = (const char*)sqlite3_column_text(sqstmt, i);
+                    int length = sqlite3_column_bytes(sqstmt, i);
+                    baton->colData[i].marshalString(text, length);
+                }   break;
+                case SQLITE_BLOB: {
+                    const char* blob = (const char*)sqlite3_column_blob(sqstmt, i);
+                    int length = sqlite3_column_bytes(sqstmt, i);
+                    // TODO: we want to treat blobs differently, but that's for a bit later.
+                    // (We use Blobs to store objects, though we actually store them as
+                    // human-readably as much as possible.)
+                    baton->colData[i].marshalString(blob, length);
+                }   break;
+                case SQLITE_NULL:
+                    baton->colData[i].marshalNone();
+                    break;
+                default:
+                    assert(false);
+            }
+          }
+        }
+
+        if (stmt->status != SQLITE_DONE) {
+            stmt->message = std::string(sqlite3_errmsg(stmt->db->_handle));
+        }
+    }
+
+    sqlite3_mutex_leave(mtx);
+}
+
+void Statement::Work_AfterAllMarshal(uv_work_t* req) {
+    Nan::HandleScope scope;
+    STATEMENT_INIT(MarshalBaton);
+
+    if (stmt->status != SQLITE_DONE) {
+        Error(baton);
+    } else {
+        // Fire callbacks.
+        Local<Function> cb = Nan::New(baton->callback);
+        if (!cb.IsEmpty() && cb->IsFunction()) {
+          Marshal marshal;
+          marshal.marshalDictBegin();
+          for (int i = 0; i < baton->colNames.size(); i++) {
+            marshal.marshalString(baton->colNames[i]);
+            marshal.marshalList(baton->countRows);
+            marshal.append(baton->colData[i]);
+          }
+          marshal.marshalDictEnd();
+          const std::vector<char> &buffer = marshal.getBuffer();
+          Local<Value> result(Nan::CopyBuffer(&buffer[0], buffer.size()).ToLocalChecked());
+          Local<Value> argv[] = { Nan::Null(), result };
+          TRY_CATCH_CALL(stmt->handle(), cb, 2, argv);
+        }
+    }
+    STATEMENT_END();
+}
+
+//----------------------------------------------------------------------
 
 NAN_METHOD(Statement::Each) {
     Statement* stmt = Nan::ObjectWrap::Unwrap<Statement>(info.This());
