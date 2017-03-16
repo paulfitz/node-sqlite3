@@ -42,6 +42,20 @@ IF /I "%platform%"=="x64" powershell Install-Product node $env:nodejs_version x6
 IF /I "%platform%"=="x86" powershell Install-Product node $env:nodejs_version x86
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
+SET NODE_MAJOR=%nodejs_version:~0,1%
+ECHO node major version^: %NODE_MAJOR%
+IF %NODE_MAJOR% GTR 0 ECHO node version greater than zero, not updating npm && GOTO SKIP_APPVEYOR_INSTALL
+
+powershell Set-ExecutionPolicy Unrestricted -Scope CurrentUser -Force
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+CALL npm install --global --production npm-windows-upgrade
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+REM https://ci.appveyor.com/project/Mapbox/node-sqlite3/build/1.0.500/job/n2y9fo4eg316db56#L289
+REM error C2373: '__pfnDliNotifyHook2': redefinition; different type modifiers
+REM at least 2.15.9 is needed: https://github.com/nodejs/node-gyp/issues/972#issuecomment-231055109
+CALL npm-windows-upgrade --npm-version 2.15.9 --no-dns-check --no-prompt
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+
 :SKIP_APPVEYOR_INSTALL
 IF /I "%msvs_toolset%"=="12" GOTO NODE_INSTALLED
 
