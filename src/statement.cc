@@ -118,6 +118,7 @@ void Statement::Work_BeginPrepare(Database::Baton* baton) {
     baton->db->pending++;
     int status = uv_queue_work(uv_default_loop(),
         &baton->request, Work_Prepare, (uv_after_work_cb)Work_AfterPrepare);
+    UNUSED(status);
     assert(status == 0);
 }
 
@@ -661,7 +662,7 @@ void Statement::Work_AfterAllMarshal(uv_work_t* req) {
         if (!cb.IsEmpty() && cb->IsFunction()) {
           Marshal marshal;
           marshal.marshalDictBegin();
-          for (int i = 0; i < baton->colNames.size(); i++) {
+          for (size_t i = 0; i < baton->colNames.size(); i++) {
             marshal.marshalString(baton->colNames[i]);
             marshal.marshalList(baton->countRows);
             marshal.append(baton->colData[i]);
