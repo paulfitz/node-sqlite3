@@ -63,6 +63,9 @@ void Marshaller::_writeEndian(T value, bool wantLittleEndian) {
   writeEndian<T>(&buffer[offset], value, wantLittleEndian);
 }
 
+// Instantiate the types we use explicitly.
+template void Marshaller::_writeEndian<int32_t>(int32_t value, bool wantLittleEndian);
+template void Marshaller::_writeEndian<double>(double value, bool wantLittleEndian);
 
 typedef std::pair<std::string, v8::Local<v8::Value> > StringPair;
 static bool sortByFirst(const StringPair &a, const StringPair &b) {
