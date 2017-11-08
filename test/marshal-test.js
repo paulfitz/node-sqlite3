@@ -29,6 +29,8 @@ describe('marshal', function() {
       '[\x03\x00\x00\x00i\x01\x00\x00\x00i\x02\x00\x00\x00i\x03\x00\x00\x00'],
     [{'This': 4, 'is': 0, 'a': stringToArray('test')},
       '{u\x04\x00\x00\x00Thisi\x04\x00\x00\x00u\x01\x00\x00\x00as\x04\x00\x00\x00testu\x02\x00\x00\x00isi\x00\x00\x00\x000'],
+    // Limits of 32-bit integers.
+    [[0x7FFFFFFF, -0x80000000], '[\x02\x00\x00\x00i\xff\xff\xff\x7fi\x00\x00\x00\x80'],
   ];
 
   it("should serialize correctly", function() {
@@ -40,6 +42,45 @@ describe('marshal', function() {
                        "\n        actual: " + escape(arrayToBinString(marshalled)) +
                        "\n      expected: " + escape(arrayToBinString(expected)));
     }
+  });
+
+  it("should deserialize correctly", function() {
+    for (const [expected, marshalledAsString] of samples) {
+      const marshalled = binStringToArray(marshalledAsString);
+      const parsed = marshal.parse(marshalled);
+      assert.deepEqual(parsed, expected,
+                       "Wrong parsing of " + escape(marshalledAsString) +
+                       "\n        actual: " + escape(parsed) +
+                       "\n      expected: " + escape(expected));
+    }
+  });
+
+  it("should parse interned strings correctly", function() {
+    const testData = '{t\x03\x00\x00\x00aaat\x03\x00\x00\x00bbbR\x01\x00\x00\x00R\x00\x00\x00\x000';
+    assert.deepEqual(marshal.parse(binStringToArray(testData)),
+      { 'aaa': stringToArray('bbb'),
+        'bbb': stringToArray('aaa')
+      });
+  });
+
+  it("should account for host endianness", function() {
+    function compare(value, serialization) {
+      assert.deepEqual(marshal.parse(serialization), value);
+      assert.deepEqual(marshal.serialize(value), serialization);
+    }
+
+    compare(0x01020304, binStringToArray('i\x04\x03\x02\x01'));
+    compare(1.23, binStringToArray('g\xae\x47\xe1\x7a\x14\xae\xf3\x3f'));
+
+    // Reversed output.
+    marshal.testOppositeEndianness(true);
+    compare(0x01020304, binStringToArray('i\x01\x02\x03\x04'));
+    compare(1.23, binStringToArray('g\x3f\xf3\xae\x14\x7a\xe1\x47\xae'));
+
+    // Restore correct serialization.
+    marshal.testOppositeEndianness(false);
+    compare(0x01020304, binStringToArray('i\x04\x03\x02\x01'));
+    compare(1.23, binStringToArray('g\xae\x47\xe1\x7a\x14\xae\xf3\x3f'));
   });
 });
 

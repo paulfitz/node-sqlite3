@@ -660,15 +660,15 @@ void Statement::Work_AfterAllMarshal(uv_work_t* req) {
         // Fire callbacks.
         Local<Function> cb = Nan::New(baton->callback);
         if (!cb.IsEmpty() && cb->IsFunction()) {
-          Marshal marshal;
-          marshal.marshalDictBegin();
+          Marshaller marshaller;
+          marshaller.marshalDictBegin();
           for (size_t i = 0; i < baton->colNames.size(); i++) {
-            marshal.marshalString(baton->colNames[i]);
-            marshal.marshalList(baton->countRows);
-            marshal.append(baton->colData[i]);
+            marshaller.marshalString(baton->colNames[i]);
+            marshaller.marshalList(baton->countRows);
+            marshaller.append(baton->colData[i]);
           }
-          marshal.marshalDictEnd();
-          const std::vector<char> &buffer = marshal.getBuffer();
+          marshaller.marshalDictEnd();
+          const std::vector<char> &buffer = marshaller.getBuffer();
           Local<Value> result(Nan::CopyBuffer(&buffer[0], buffer.size()).ToLocalChecked());
           Local<Value> argv[] = { Nan::Null(), result };
           TRY_CATCH_CALL(stmt->handle(), cb, 2, argv);

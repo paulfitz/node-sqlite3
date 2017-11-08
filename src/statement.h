@@ -123,7 +123,7 @@ public:
         MarshalBaton(Statement* stmt_, Local<Function> cb_) :
             Baton(stmt_, cb_), countRows(0) {}
         std::vector<std::string> colNames;
-        std::vector<Marshal> colData;
+        std::vector<Marshaller> colData;
         int countRows;
     };
 
