@@ -623,14 +623,11 @@ void Statement::Work_AllMarshal(uv_work_t* req) {
                 case SQLITE_TEXT: {
                     const char* text = (const char*)sqlite3_column_text(sqstmt, i);
                     int length = sqlite3_column_bytes(sqstmt, i);
-                    baton->colData[i].marshalString(text, length);
+                    baton->colData[i].marshalUnicode(text, length);
                 }   break;
                 case SQLITE_BLOB: {
                     const char* blob = (const char*)sqlite3_column_blob(sqstmt, i);
                     int length = sqlite3_column_bytes(sqstmt, i);
-                    // TODO: we want to treat blobs differently, but that's for a bit later.
-                    // (We use Blobs to store objects, though we actually store them as
-                    // human-readably as much as possible.)
                     baton->colData[i].marshalString(blob, length);
                 }   break;
                 case SQLITE_NULL:
