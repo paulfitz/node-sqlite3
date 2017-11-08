@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <vector>
 #include <string>
+#include <nan.h>
 
 enum MarshalCode {
   MARSHAL_NULL     = '0',
@@ -56,6 +57,9 @@ class Marshal {
       _writeBytes(&buf[0], buf.size());
     }
 
+    // Marshal the given value depending on its type.
+    void marshalValue(v8::Local<v8::Value> val);
+
     void marshalNone() {
       _writeCode(MARSHAL_NONE);
     }
@@ -66,6 +70,12 @@ class Marshal {
 
     void marshalString(const char *value, int32_t size) {
       _writeCode(MARSHAL_STRING);
+      _writeBytes(&size, sizeof(int32_t));
+      _writeBytes(value, size);
+    }
+
+    void marshalUnicode(const char *value, int32_t size) {
+      _writeCode(MARSHAL_UNICODE);
       _writeBytes(&size, sizeof(int32_t));
       _writeBytes(value, size);
     }
