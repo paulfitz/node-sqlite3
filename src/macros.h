@@ -125,6 +125,7 @@ const char* sqlite_authorizer_string(int type);
     int status = uv_queue_work(uv_default_loop(),                              \
         &baton->request,                                                       \
         Work_##type, reinterpret_cast<uv_after_work_cb>(Work_After##type));    \
+    UNUSED(status);                                                            \
     assert(status == 0);
 
 #define STATEMENT_INIT(type)                                                   \
@@ -150,5 +151,8 @@ const char* sqlite_authorizer_string(int type);
             case SQLITE_NULL:    delete (Values::Null*)(field); break;         \
         }                                                                      \
     }
+
+/* Use UNUSED(x) to silence compiler warning about an unused value. */
+#define UNUSED(x) ((void)(x))
 
 #endif

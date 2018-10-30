@@ -143,6 +143,7 @@ NAN_METHOD(Database::New) {
 void Database::Work_BeginOpen(Baton* baton) {
     int status = uv_queue_work(uv_default_loop(),
         &baton->request, Work_Open, (uv_after_work_cb)Work_AfterOpen);
+    UNUSED(status);
     assert(status == 0);
 }
 
@@ -229,6 +230,7 @@ void Database::Work_BeginClose(Baton* baton) {
 
     int status = uv_queue_work(uv_default_loop(),
         &baton->request, Work_Close, (uv_after_work_cb)Work_AfterClose);
+    UNUSED(status);
     assert(status == 0);
 }
 
@@ -524,6 +526,7 @@ void Database::Work_BeginExec(Baton* baton) {
     assert(baton->db->pending == 0);
     int status = uv_queue_work(uv_default_loop(),
         &baton->request, Work_Exec, (uv_after_work_cb)Work_AfterExec);
+    UNUSED(status);
     assert(status == 0);
 }
 
@@ -624,6 +627,7 @@ void Database::Work_BeginLoadExtension(Baton* baton) {
     assert(baton->db->pending == 0);
     int status = uv_queue_work(uv_default_loop(),
         &baton->request, Work_LoadExtension, reinterpret_cast<uv_after_work_cb>(Work_AfterLoadExtension));
+    UNUSED(status);
     assert(status == 0);
 }
 

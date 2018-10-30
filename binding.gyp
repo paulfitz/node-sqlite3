@@ -33,6 +33,7 @@
       ],
       "sources": [
         "src/database.cc",
+        "src/marshal.cc",
         "src/node_sqlite3.cc",
         "src/statement.cc"
       ]

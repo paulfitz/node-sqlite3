@@ -167,14 +167,16 @@ In the case of MacOS with Homebrew, the command should look like the following:
 
     npm install sqlite3 --build-from-source --sqlite_libname=sqlcipher --sqlite=`brew --prefix` --runtime=electron --target=1.7.6 --dist-url=https://atom.io/download/electron
 
-# Testing
+# Testing (updated for marshalling)
 
 [mocha](https://github.com/visionmedia/mocha) is required to run unit tests.
 
 In sqlite3's directory (where its `package.json` resides) run the following:
 
     npm install mocha
+    npm run rebuild-tests #rebuilds marshal hooks
     npm test
+
 
 # Contributors
 
