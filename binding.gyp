@@ -32,6 +32,7 @@
         ]
       ],
       "sources": [
+        "src/backup.cc",
         "src/database.cc",
         "src/marshal.cc",
         "src/node_sqlite3.cc",
