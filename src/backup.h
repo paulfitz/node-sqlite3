@@ -117,6 +117,7 @@ public:
 
     struct InitializeBaton : Database::Baton {
         Backup* backup;
+        Database* otherDb;
         std::string filename;
         std::string sourceName;
         std::string destName;
@@ -151,9 +152,10 @@ public:
 
     Backup(Database* db_) : Nan::ObjectWrap(),
            db(db_),
+           otherDb(NULL),
            _handle(NULL),
-           _otherDb(NULL),
-           _destDb(NULL),
+           _otherDbHandle(NULL),
+           _destDbHandle(NULL),
            inited(false),
            locked(true),
            completed(false),
@@ -185,6 +187,7 @@ public:
     static NAN_SETTER(RetryErrorSetter);
 
 protected:
+    static void Work_BeforeInitialize(Database::Baton* baton);
     static void Work_BeginInitialize(Database::Baton* baton);
     static void Work_Initialize(uv_work_t* req);
     static void Work_AfterInitialize(uv_work_t* req);
@@ -199,10 +202,11 @@ protected:
     void GetRetryErrors(std::set<int>& retryErrorsSet);
 
     Database* db;
+    Database* otherDb;
 
     sqlite3_backup* _handle;
-    sqlite3* _otherDb;
-    sqlite3* _destDb;
+    sqlite3* _otherDbHandle;
+    sqlite3* _destDbHandle;
     int status;
     std::string message;
 
