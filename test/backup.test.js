@@ -151,22 +151,30 @@ describe('backup', function() {
         });
     });
 
-    (sqlite3.VERSION_NUMBER < 3007011 ? it.skip : it) ('can backup from temp to main', function(done) {
-        db.exec("CREATE TEMP TABLE space (txt TEXT)", function(err) {
-            if (err) throw err;
-            db.exec("INSERT INTO space(txt) VALUES('monkey')", function(err) {
+    it('can backup from attached to main', function(done) {
+        var dba = new sqlite3.Database('test/tmp/backup.db', function(err) {
+            dba.exec("ATTACH DATABASE ':memory:' AS attached", function(err) {
                 if (err) throw err;
-                var backup = db.backup('test/tmp/backup.db', 'temp', 'main', true, function(err) {
+                dba.exec("CREATE TABLE attached.space (txt TEXT)", function(err) {
                     if (err) throw err;
-                    backup.step(-1);
-                    backup.finish(function(err) {
+                    dba.exec("INSERT INTO attached.space(txt) VALUES('monkey')", function(err) {
                         if (err) throw err;
-                        var db2 = new sqlite3.Database('test/tmp/backup.db', function(err) {
+                        var backup = dba.backup('test/tmp/backup2.db', 'attached', 'main', true, function(err) {
                             if (err) throw err;
-                            db2.get("SELECT * FROM space", function(err, row) {
+                            backup.step(-1);
+                            backup.finish(function(err) {
                                 if (err) throw err;
-                                assert.equal(row.txt, 'monkey');
-                                db2.close(done);
+                                var db2 = new sqlite3.Database('test/tmp/backup2.db', function(err) {
+                                    if (err) throw err;
+                                    db2.get("SELECT * FROM space", function(err, row) {
+                                        if (err) throw err;
+                                        assert.equal(row.txt, 'monkey');
+                                        dba.close(function(err) {
+                                            if (err) throw err;
+                                            db2.close(done);
+                                        });
+                                    });
+                                });
                             });
                         });
                     });
@@ -175,13 +183,24 @@ describe('backup', function() {
         });
     });
 
-    (sqlite3.VERSION_NUMBER < 3007011 ? it.skip : it) ('can backup from main to temp', function(done) {
-        var backup = db.backup('test/support/prepare.db', 'main', 'temp', false, function(err) {
+    it('can backup from main to attached', function(done) {
+        var dba = new sqlite3.Database('test/tmp/backup.db', function(err) {
             if (err) throw err;
-            backup.step(-1);
-            backup.finish(function(err) {
+            dba.exec("ATTACH DATABASE ':memory:' AS attached", function(err) {
                 if (err) throw err;
-                assertRowsMatchDb(db, 'temp.foo', db, 'main.foo', done);
+                var backup = db.backup(dba, 'main', 'attached', true, function(err) {
+                    if (err) throw err;
+                    backup.step(-1);
+                    backup.finish(function(err) {
+                        if (err) throw err;
+                        assertRowsMatchDb(db, 'main.foo', dba, 'attached.foo', function() {
+                            dba.close(function(err) {
+                                if (err) throw err;
+                                done();
+                            });
+                        });
+                    });
+                });
             });
         });
     });
