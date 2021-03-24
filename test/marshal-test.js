@@ -31,6 +31,10 @@ describe('marshal', function() {
       '{u\x04\x00\x00\x00Thisi\x04\x00\x00\x00u\x01\x00\x00\x00as\x04\x00\x00\x00testu\x02\x00\x00\x00isi\x00\x00\x00\x000'],
     // Limits of 32-bit integers.
     [[0x7FFFFFFF, -0x80000000], '[\x02\x00\x00\x00i\xff\xff\xff\x7fi\x00\x00\x00\x80'],
+    // Beyond 32-bit limit, we marshal numbers as doubles.
+    [0x80000000, 'g\x00\x00\x00\x00\x00\x00\xe0A'],
+    [-9007199254740991, 'g\xff\xff\xff\xff\xff\xff?\xc3'],
+    [9007199254740992, 'g\x00\x00\x00\x00\x00\x00@C'],
   ];
 
   it("should serialize correctly", function() {

@@ -614,9 +614,16 @@ void Statement::Work_AllMarshal(uv_work_t* req) {
           for (int i = 0; i < columns; i++) {
             int type = sqlite3_column_type(sqstmt, i);
             switch (type) {
-                case SQLITE_INTEGER:
-                    baton->colData[i].marshalInt(sqlite3_column_int64(sqstmt, i));
+                case SQLITE_INTEGER: {
+                    int64_t value = sqlite3_column_int64(sqstmt, i);
+                    int32_t smallValue = int32_t(value);
+                    if (value == smallValue) {
+                      baton->colData[i].marshalInt(smallValue);
+                    } else {
+                      baton->colData[i].marshalDouble(value);
+                    }
                     break;
+                }
                 case SQLITE_FLOAT:
                     baton->colData[i].marshalDouble(sqlite3_column_double(sqstmt, i));
                     break;
