@@ -118,7 +118,7 @@ public:
     };
 
     struct MarshalBaton : Baton {
-        MarshalBaton(Statement* stmt_, Local<Function> cb_) :
+      MarshalBaton(Statement* stmt_, Napi::Function cb_) :
             Baton(stmt_, cb_), countRows(0) {}
         std::vector<std::string> colNames;
         std::vector<Marshaller> colData;

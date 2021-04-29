@@ -1,52 +1,70 @@
-#include <nan.h>
+#include <napi.h>
+#include <uv.h>
 #include <string>
 #include <vector>
 #include "../../src/marshal.h"
 
 
-NAN_METHOD(Serialize) {
+Napi::Value Serialize(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
   if (info.Length() > 0) {
     Marshaller m;
     m.marshalValue(info[0]);
     const std::vector<char> &buffer = m.getBuffer();
-    info.GetReturnValue().Set(Nan::CopyBuffer(&buffer[0], buffer.size()).ToLocalChecked());
+    Napi::Env env = info.Env();
+    return Napi::Buffer<char>::Copy(env, &buffer[0], buffer.size());
   }
+  return env.Null();
 }
 
-NAN_METHOD(Parse) {
+Napi::Value Parse(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
   if (info.Length() > 0) {
-    if (!node::Buffer::HasInstance(info[0])) {
-      Nan::ThrowError("Argument must be a buffer");
+    if (!info[0].IsBuffer()) {
+      Napi::Error::New(env, "Argument must be a buffer").ThrowAsJavaScriptException();
+      return env.Null();
     } else {
-      v8::Local<v8::Object> buffer = Nan::To<v8::Object>(info[0]).ToLocalChecked();
-      Nan::MaybeLocal<v8::Value> result = Unmarshaller::parse(
-          node::Buffer::Data(buffer), node::Buffer::Length(buffer));
+      Napi::Object buffer = info[0].As<Napi::Object>();
+      Napi::Value result = Unmarshaller::parse(info,
+          buffer.As<Napi::Buffer<char>>().Data(), buffer.As<Napi::Buffer<char>>().Length());
       if (!result.IsEmpty()) {
-        info.GetReturnValue().Set(result.ToLocalChecked());
+        return result;
       }
     }
   }
+  return env.Null();
 }
 
-NAN_METHOD(TestOppositeEndianness) {
+Napi::Value TestOppositeEndianness(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
   if (info.Length() > 0) {
-    marshalTestOppositeEndianness(Nan::To<bool>(info[0]).FromJust());
+    marshalTestOppositeEndianness(info[0].As<Napi::Boolean>().Value());
   }
+  return env.Null();
 }
 
-NAN_MODULE_INIT(Init) {
-  Nan::Set(target
-    , Nan::New<v8::String>("serialize").ToLocalChecked()
-    , Nan::New<v8::FunctionTemplate>(Serialize)->GetFunction()
+Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  exports.Set(Napi::String::New(env, "serialize"),
+              Napi::Function::New(env, Serialize));
+  exports.Set(Napi::String::New(env, "parse"),
+              Napi::Function::New(env, Parse));
+  exports.Set(Napi::String::New(env, "testOppositeEndianness"),
+              Napi::Function::New(env, TestOppositeEndianness));
+  return exports;
+  /*
+  (target
+    ).Set(Napi::String::New(env, "serialize")
+    , Napi::Function::New(env, Serialize)
   );
-  Nan::Set(target
-    , Nan::New<v8::String>("parse").ToLocalChecked()
-    , Nan::New<v8::FunctionTemplate>(Parse)->GetFunction()
+  (target
+    ).Set(Napi::String::New(env, "parse")
+    , Napi::Function::New(env, Parse)
   );
-  Nan::Set(target
-    , Nan::New<v8::String>("testOppositeEndianness").ToLocalChecked()
-    , Nan::New<v8::FunctionTemplate>(TestOppositeEndianness)->GetFunction()
+  (target
+    ).Set(Napi::String::New(env, "testOppositeEndianness")
+    , Napi::Function::New(env, TestOppositeEndianness)
   );
+  */
 }
 
-NODE_MODULE(marshal, Init)
+NODE_API_MODULE(marshal, Init)

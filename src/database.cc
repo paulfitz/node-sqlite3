@@ -145,6 +145,7 @@ void Database::Work_BeginOpen(Baton* baton) {
         env, NULL, Napi::String::New(env, "sqlite3.Database.Open"),
         Work_Open, Work_AfterOpen, baton, &baton->request
     );
+    UNUSED(status);
     assert(status == 0);
     napi_queue_async_work(env, baton->request);
 }
@@ -235,8 +236,11 @@ void Database::Work_BeginClose(Baton* baton) {
     baton->db->RemoveCallbacks();
     baton->db->closing = true;
 
-    int status = uv_queue_work(uv_default_loop(),
-        &baton->request, Work_Close, (uv_after_work_cb)Work_AfterClose);
+    Napi::Env env = baton->db->Env();
+    int status = napi_create_async_work(
+        env, NULL, Napi::String::New(env, "sqlite3.Database.Close"),
+        Work_Close, Work_AfterClose, baton, &baton->request
+    );
     UNUSED(status);
     assert(status == 0);
     napi_queue_async_work(env, baton->request);
@@ -555,6 +559,7 @@ void Database::Work_BeginExec(Baton* baton) {
         env, NULL, Napi::String::New(env, "sqlite3.Database.Exec"),
         Work_Exec, Work_AfterExec, baton, &baton->request
     );
+    UNUSED(status);
     assert(status == 0);
     napi_queue_async_work(env, baton->request);
 }
@@ -665,6 +670,7 @@ void Database::Work_BeginLoadExtension(Baton* baton) {
         env, NULL, Napi::String::New(env, "sqlite3.Database.LoadExtension"),
         Work_LoadExtension, Work_AfterLoadExtension, baton, &baton->request
     );
+    UNUSED(status);
     assert(status == 0);
     napi_queue_async_work(env, baton->request);
 }

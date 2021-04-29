@@ -67,51 +67,63 @@ void Marshaller::_writeEndian(T value, bool wantLittleEndian) {
 template void Marshaller::_writeEndian<int32_t>(int32_t value, bool wantLittleEndian);
 template void Marshaller::_writeEndian<double>(double value, bool wantLittleEndian);
 
-typedef std::pair<std::string, v8::Local<v8::Value> > StringPair;
+typedef std::pair<std::string, Napi::Value > StringPair;
 static bool sortByFirst(const StringPair &a, const StringPair &b) {
   return a.first < b.first;
 }
 
-void Marshaller::marshalValue(v8::Local<v8::Value> val) {
-  if (val->IsBoolean()) {
-    marshalBool(val->BooleanValue());
-  } else if (val->IsInt32()) {
-    marshalInt(val->Int32Value());
-  } else if (val->IsNumber()) {
-    marshalDouble(val->NumberValue());
-  } else if (val->IsString()) {
-    Nan::Utf8String strVal(val);
-    marshalUnicode(*strVal, strVal.length());
-  } else if (val->IsArray()) {
-    v8::Local<v8::Array> array = v8::Local<v8::Array>::Cast(val);
-    int length = array->Length();
+// A Napi substitute IsInt32()
+inline bool OtherIsInt(Napi::Number source) {
+    double orig_val = source.DoubleValue();
+    double int_val = (double)source.Int32Value();
+    if (orig_val == int_val) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void Marshaller::marshalValue(Napi::Value val) {
+  if (val.IsBoolean()) {
+    marshalBool(val.As<Napi::Boolean>().Value());
+  } else if (val.IsNumber()) {
+    Napi::Number num = val.As<Napi::Number>();
+    if (OtherIsInt(num)) {
+      marshalInt(num.Int32Value());
+    } else {
+      marshalDouble(num.DoubleValue());
+    }
+  } else if (val.IsString()) {
+    std::string strVal = val.As<Napi::String>();
+    marshalUnicode(strVal.c_str(), strVal.length());
+  } else if (val.IsArray()) {
+    Napi::Array array = val.As<Napi::Array>();
+    int length = array.Length();
     marshalList(length);
     for (int i = 0; i < length; i++) {
-      marshalValue(Nan::Get(array, i).ToLocalChecked());
+      marshalValue((array).Get(i));
     }
-  } else if (node::Buffer::HasInstance(val)) {
-    v8::Local<v8::Object> buffer = Nan::To<v8::Object>(val).ToLocalChecked();
-    marshalString(node::Buffer::Data(buffer), node::Buffer::Length(buffer));
-  } else if (val->IsObject()) {
-    v8::Local<v8::Object> object = v8::Local<v8::Object>::Cast(val);
-    v8::Local<v8::Array> array = Nan::GetPropertyNames(object).ToLocalChecked();
+  } else if (val.IsBuffer()) {
+    Napi::Object buffer = val.As<Napi::Object>();
+    marshalString(buffer.As<Napi::Buffer<char>>().Data(), buffer.As<Napi::Buffer<char>>().Length());
+  } else if (val.IsObject()) {
+    Napi::Object object = val.As<Napi::Object>();
+    Napi::Array array = object.GetPropertyNames();
     // Keys need to be serialized in sorted order.
-    int length = array->Length();
+    int length = array.Length();
     std::vector<StringPair> keys;
     keys.reserve(length);
     for (int i = 0; i < length; i++) {
-      v8::Local<v8::Value> name = Nan::Get(array, i).ToLocalChecked();
-      Nan::Utf8String strVal(name);
-      if (*strVal) {
-        keys.push_back(std::make_pair(std::string(*strVal, strVal.length()), name));
-      }
+      Napi::Value name = (array).Get(i);
+      std::string strVal = name.As<Napi::String>();
+      keys.push_back(std::make_pair(strVal, name));
     }
     std::sort(keys.begin(), keys.end(), sortByFirst);
     marshalDictBegin();
     for (size_t i = 0; i < keys.size(); i++) {
-      v8::Local<v8::Value> name = keys[i].second;
+      Napi::Value name = keys[i].second;
       marshalValue(name);
-      marshalValue(Nan::Get(object, name).ToLocalChecked());
+      marshalValue((object).Get(name));
     }
     marshalDictEnd();
   } else {
@@ -160,15 +172,16 @@ bool Unmarshaller::readBytes(size_t len, const char **result) {
   return true;
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parse() {
+Napi::Value Unmarshaller::_parse() {
+  Napi::Env env = info.Env();
   uint8_t code = 0;
   if (!readUint8(&code)) { return fail(); }
   _lastCode = code;
   switch (code) {
-    case MARSHAL_NULL:       return Nan::Null();
-    case MARSHAL_NONE:       return Nan::Null();
-    case MARSHAL_FALSE:      return Nan::False();
-    case MARSHAL_TRUE:       return Nan::True();
+    case MARSHAL_NULL:       return env.Null();
+    case MARSHAL_NONE:       return env.Null();
+    case MARSHAL_FALSE:      return Napi::Boolean::New(env, false);
+    case MARSHAL_TRUE:       return Napi::Boolean::New(env, true);
     case MARSHAL_INT:        return _parseInt32();
     case MARSHAL_INT64:      return _parseInt64();
     case MARSHAL_BFLOAT:     return _parseBinaryFloat();
@@ -182,7 +195,7 @@ Nan::MaybeLocal<v8::Value> Unmarshaller::_parse() {
 
     // We could support it, but it's unclear if we can parse consistently with
     // Python, and it's a deprecated way to serialize floats anyway.
-    case MARSHAL_FLOAT:     return Nan::Null();
+    case MARSHAL_FLOAT:     return env.Null();
     // None of the following are supported.
     case MARSHAL_STOPITER:
     case MARSHAL_ELLIPSIS:
@@ -191,108 +204,117 @@ Nan::MaybeLocal<v8::Value> Unmarshaller::_parse() {
     case MARSHAL_CODE:
     case MARSHAL_UNKNOWN:
     case MARSHAL_SET:
-    case MARSHAL_FROZENSET:  return Nan::Null();
-    default:                 return Nan::Null();
+    case MARSHAL_FROZENSET:  return env.Null();
+    default:                 return env.Null();
   }
 }
 
 
 // A shorthand usd internally below.
-static inline Nan::MaybeLocal<v8::Value> emptyValue() {
-  return Nan::MaybeLocal<v8::Value>();
+static inline Napi::Value emptyValue() {
+  return Napi::Value();
 }
 
 // Helper used internally below.
 template<typename T>
-static Nan::MaybeLocal<v8::Value> toMaybeLocalValue(Nan::MaybeLocal<T> value) {
-  return value.IsEmpty() ? emptyValue() : Nan::MaybeLocal<v8::Value>(value.ToLocalChecked());
+static Napi::Value toMaybeLocalValue(const Napi::Value& value) {
+  return value; // value.IsEmpty() ? emptyValue() : Napi::Value(value);
 }
 
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseInt32() {
+Napi::Value Unmarshaller::_parseInt32() {
   int32_t value = 0;
   if (!readInt32(&value)) { return fail(); }
-  return Nan::New<v8::Number>(value);
+  Napi::Env env = info.Env();
+  return Napi::Number::New(env, value);
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseInt64() {
+Napi::Value Unmarshaller::_parseInt64() {
   int32_t low = 0, hi = 0;
   if (!readInt32(&low) || !readInt32(&hi)) { return fail(); }
   if ((hi == 0 && low >= 0) || (hi == -1 && low < 0)) {
-    return Nan::New<v8::Number>(low);
+    Napi::Env env = info.Env();
+    return Napi::Number::New(env, low);
   }
   // TODO We could actually support 53 bits or so, and offer imprecise doubles for larger ones.
   // Or pass along a raw representation, such as https://github.com/broofa/node-int64.
   return fail("int64 only supports 32-bit values for now");
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseBinaryFloat() {
+Napi::Value Unmarshaller::_parseBinaryFloat() {
   double value = 0;
   if (!readFloat64(&value)) { return fail(); }
-  return Nan::New<v8::Number>(value);
+  Napi::Env env = info.Env();
+  return Napi::Number::New(env, value);
 }
 
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseByteString() {
+Napi::Value Unmarshaller::_parseByteString() {
   int32_t len = 0;
   const char *buf = NULL;
   if (!readInt32(&len) || !readBytes(len, &buf)) { return fail(); }
-  return toMaybeLocalValue(Nan::CopyBuffer(buf, len));
+  Napi::Env env = info.Env();
+  return Napi::Buffer<char>::Copy(env, buf, len);
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseUnicode() {
+Napi::Value Unmarshaller::_parseUnicode() {
   int32_t len = 0;
   const char *buf = NULL;
   if (!readInt32(&len) || !readBytes(len, &buf)) { return fail(); }
-  return toMaybeLocalValue(Nan::New<v8::String>(buf, len));
+  Napi::Env env = info.Env();
+  return Napi::String::New(env, buf, len);
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseInterned() {
+Napi::Value Unmarshaller::_parseInterned() {
   int32_t len = 0;
   const char *buf = NULL;
   if (!readInt32(&len) || !readBytes(len, &buf)) { return fail(); }
   stringTable.push_back(std::string(buf, len));
-  return toMaybeLocalValue(Nan::CopyBuffer(buf, len));
+  Napi::Env env = info.Env();
+  return Napi::Buffer<char>::Copy(env, buf, len);
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseStringRef() {
+Napi::Value Unmarshaller::_parseStringRef() {
   int32_t index = 0;
   if (!readInt32(&index)) { return fail(); }
   if (index >= 0 && size_t(index) < stringTable.size()) {
     const std::string &result = stringTable[index];
-    return toMaybeLocalValue(Nan::CopyBuffer(&result[0], result.size()));
+    Napi::Env env = info.Env();
+    return Napi::Buffer<char>::Copy(env, &result[0], result.size());
   } else {
     return fail("Invalid interned string reference");
   }
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseList() {
+Napi::Value Unmarshaller::_parseList() {
   int32_t len = 0;
   if (!readInt32(&len)) { return fail(); }
 
-  Nan::EscapableHandleScope scope;
-  v8::Local<v8::Array> result = Nan::New<v8::Array>(len);
+  Napi::Env env = info.Env();
+  Napi::EscapableHandleScope scope(env);
+  Napi::Array result = Napi::Array::New(env, len);
   for (int i = 0; i < len; i++) {
-    Nan::MaybeLocal<v8::Value> item = _parse();
+    Napi::Value item = _parse();
     if (item.IsEmpty()) { return emptyValue(); }
-    Nan::Set(result, i, item.ToLocalChecked());
+    (result).Set(i, item);
   }
   return scope.Escape(result);
 }
 
-Nan::MaybeLocal<v8::Value> Unmarshaller::_parseDict() {
-  Nan::EscapableHandleScope scope;
-  v8::Local<v8::Object> result = Nan::New<v8::Object>();
+Napi::Value Unmarshaller::_parseDict() {
+  Napi::Env env = info.Env();
+  Napi::EscapableHandleScope scope(env);
+  Napi::Object result = Napi::Object::New(env);
   while (true) {
-    Nan::MaybeLocal<v8::Value> key = _parse();
+    Napi::Value key = _parse();
     if (key.IsEmpty()) { return emptyValue(); }
 
     if (_lastCode == MARSHAL_NULL) { break; }
 
-    Nan::MaybeLocal<v8::Value> value = Unmarshaller::_parse();
+    Napi::Value value = Unmarshaller::_parse();
     if (value.IsEmpty()) { return emptyValue(); }
 
-    Nan::Set(result, key.ToLocalChecked(), value.ToLocalChecked());
+    (result).Set(key, value);
   }
   return scope.Escape(result);
 }

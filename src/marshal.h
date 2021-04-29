@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <vector>
 #include <string>
-#include <nan.h>
+#include <napi.h>
 
 enum MarshalCode {
   MARSHAL_NULL     = '0',
@@ -61,7 +61,7 @@ class Marshaller {
     }
 
     // Marshal the given value depending on its type.
-    void marshalValue(v8::Local<v8::Value> val);
+    void marshalValue(Napi::Value val);
 
     void marshalNone() {
       _writeCode(MARSHAL_NONE);
@@ -123,8 +123,8 @@ class Marshaller {
 
 class Unmarshaller {
   public:
-    static Nan::MaybeLocal<v8::Value> parse(const char *data, size_t len) {
-      Unmarshaller u(data, len);
+    static Napi::Value parse(const Napi::CallbackInfo& info, const char *data, size_t len) {
+      Unmarshaller u(info, data, len);
       return u._parse();
     }
 
@@ -136,31 +136,34 @@ class Unmarshaller {
     const char *data;
     size_t len;
     uint8_t _lastCode;
+    const Napi::CallbackInfo& info;
 
-    Unmarshaller(const char *_data, size_t _len) : data(_data), len(_len), _lastCode(0) {}
+    Unmarshaller(const Napi::CallbackInfo& _info, const char *_data, size_t _len) : data(_data), len(_len), _lastCode(0), info(_info) {}
     const char *consumeBytes(size_t numBytes);
     bool readUint8(uint8_t *result);
     bool readInt32(int32_t *result);
     bool readFloat64(double *result);
     bool readBytes(size_t len, const char **result);
 
-    Nan::MaybeLocal<v8::Value> fail(const char *msg = NULL) {
-      Nan::ThrowError(msg ? msg : "invalid or truncated marshalled data");
-      return Nan::MaybeLocal<v8::Value>();
+    Napi::Value fail(const char *msg = NULL) {
+      Napi::Env env = info.Env();
+      Napi::Error::New(env, msg ? msg : "invalid or truncated marshalled data").ThrowAsJavaScriptException();
+
+      return Napi::Value();
     }
 
 
-    Nan::MaybeLocal<v8::Value> _parse();
-    Nan::MaybeLocal<v8::Value> _parseInt32();
-    Nan::MaybeLocal<v8::Value> _parseInt64();
-    Nan::MaybeLocal<v8::Value> _parseStringFloat();
-    Nan::MaybeLocal<v8::Value> _parseBinaryFloat();
-    Nan::MaybeLocal<v8::Value> _parseByteString();
-    Nan::MaybeLocal<v8::Value> _parseInterned();
-    Nan::MaybeLocal<v8::Value> _parseStringRef();
-    Nan::MaybeLocal<v8::Value> _parseList();
-    Nan::MaybeLocal<v8::Value> _parseDict();
-    Nan::MaybeLocal<v8::Value> _parseUnicode();
+    Napi::Value _parse();
+    Napi::Value _parseInt32();
+    Napi::Value _parseInt64();
+    Napi::Value _parseStringFloat();
+    Napi::Value _parseBinaryFloat();
+    Napi::Value _parseByteString();
+    Napi::Value _parseInterned();
+    Napi::Value _parseStringRef();
+    Napi::Value _parseList();
+    Napi::Value _parseDict();
+    Napi::Value _parseUnicode();
 };
 
 // Since we have our own endianness code, it's nice to be able to test it. This

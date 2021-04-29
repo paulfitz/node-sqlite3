@@ -18,6 +18,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
       InstanceMethod("get", &Statement::Get),
       InstanceMethod("run", &Statement::Run),
       InstanceMethod("all", &Statement::All),
+      InstanceMethod("allMarshal", &Statement::AllMarshal),
       InstanceMethod("each", &Statement::Each),
       InstanceMethod("reset", &Statement::Reset),
       InstanceMethod("finalize", &Statement::Finalize_),
@@ -607,15 +608,17 @@ void Statement::Work_AfterAll(napi_env e, napi_status status, void* data) {
 }
 
 //----------------------------------------------------------------------
-NAN_METHOD(Statement::AllMarshal) {
-    Statement* stmt = Nan::ObjectWrap::Unwrap<Statement>(info.This());
+Napi::Value Statement::AllMarshal(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Statement* stmt = this;
 
     Baton* baton = stmt->Bind<MarshalBaton>(info);
     if (baton == NULL) {
-        return Nan::ThrowError("Data type is not supported");
+        Napi::Error::New(env, "Data type is not supported").ThrowAsJavaScriptException();
+        return env.Null();
     } else {
         stmt->Schedule(Work_BeginAllMarshal, baton);
-        info.GetReturnValue().Set(info.This());
+        return info.This();
     }
 }
 
@@ -623,7 +626,7 @@ void Statement::Work_BeginAllMarshal(Baton* baton) {
     STATEMENT_BEGIN(AllMarshal);
 }
 
-void Statement::Work_AllMarshal(uv_work_t* req) {
+void Statement::Work_AllMarshal(napi_env e, void* data) {
     STATEMENT_INIT(MarshalBaton);
 
     sqlite3_mutex* mtx = sqlite3_db_mutex(stmt->db->_handle);
@@ -689,16 +692,17 @@ void Statement::Work_AllMarshal(uv_work_t* req) {
     sqlite3_mutex_leave(mtx);
 }
 
-void Statement::Work_AfterAllMarshal(uv_work_t* req) {
-    Nan::HandleScope scope;
+void Statement::Work_AfterAllMarshal(napi_env e, napi_status status, void* data) {
+  //Nan::HandleScope scope;
     STATEMENT_INIT(MarshalBaton);
 
+    Napi::Env env = stmt->Env();
     if (stmt->status != SQLITE_DONE) {
         Error(baton);
     } else {
         // Fire callbacks.
-        Local<Function> cb = Nan::New(baton->callback);
-        if (!cb.IsEmpty() && cb->IsFunction()) {
+        Napi::Function cb = baton->callback.Value();
+        if (!cb.IsUndefined() && cb.IsFunction()) {
           Marshaller marshaller;
           marshaller.marshalDictBegin();
           for (size_t i = 0; i < baton->colNames.size(); i++) {
@@ -708,9 +712,9 @@ void Statement::Work_AfterAllMarshal(uv_work_t* req) {
           }
           marshaller.marshalDictEnd();
           const std::vector<char> &buffer = marshaller.getBuffer();
-          Local<Value> result(Nan::CopyBuffer(&buffer[0], buffer.size()).ToLocalChecked());
-          Local<Value> argv[] = { Nan::Null(), result };
-          TRY_CATCH_CALL(stmt->handle(), cb, 2, argv);
+          Napi::Value result(Napi::Buffer<char>::Copy(env, &buffer[0], buffer.size()));
+          Napi::Value argv[] = { env.Null(), result };
+          TRY_CATCH_CALL(stmt->Value(), cb, 2, argv);
         }
     }
     STATEMENT_END();
