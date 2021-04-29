@@ -5,7 +5,7 @@ source ~/.nvm/nvm.sh
 set -e -u
 
 export DISPLAY=":99.0"
-GYP_ARGS="--runtime=electron --target=${ELECTRON_VERSION} --dist-url=https://atom.io/download/electron"
+GYP_ARGS="--runtime=electron --target=${ELECTRON_VERSION} --dist-url=https://electronjs.org/headers"
 NPM_BIN_DIR="$(npm bin -g 2>/dev/null)"
 
 function publish() {
@@ -18,7 +18,11 @@ function publish() {
 
 function electron_pretest() {
     npm install -g electron@${ELECTRON_VERSION}
-    npm install -g electron-mocha
+    if [ "$NODE_VERSION" -le 6 ]; then
+        npm install -g electron-mocha@7
+    else
+        npm install -g electron-mocha
+    fi
     if [ "${TRAVIS_OS_NAME}" = "osx" ]; then 
         (sudo Xvfb :99 -ac -screen 0 1024x768x8; echo ok )&
     else
